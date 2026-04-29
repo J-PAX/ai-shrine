@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model RitualEvent {
+  id          String   @id @default(cuid())
+  sessionId   String?
+  eventType   String
+  godName     String?
+  userMessage String?
+  resultText  String?
+  createdAt   DateTime @default(now())
+}

@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# OpenClaw local state
+.openclaw
+
+# Next.js local artifacts
+shrine-web/.next
+shrine-web/node_modules
+
+# env
+shrine-web/.env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
