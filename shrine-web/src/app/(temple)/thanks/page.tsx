@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-const incense = ["檀香", "白檀", "云木香"];
+type IncenseOption = { name: string; note: string };
 
 function getSessionId() {
   const stored = window.localStorage.getItem("ai-shrine-session");
@@ -20,10 +20,33 @@ function getSessionId() {
 
 export default function ThanksPage() {
   const router = useRouter();
-  const [selectedIncense, setSelectedIncense] = useState(incense[0]);
+  const [incense, setIncense] = useState<IncenseOption[]>([]);
+  const [selectedIncense, setSelectedIncense] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const sessionId = getSessionId();
+    Promise.all([
+      fetch(`/api/ritual?sessionId=${encodeURIComponent(sessionId)}`).then((response) => response.json()),
+      fetch(`/api/incense?sessionId=${encodeURIComponent(sessionId)}`).then((response) => response.json()),
+    ])
+      .then(([status, menu]: [{ available?: boolean }, { incense?: IncenseOption[] }]) => {
+        setIsAvailable(status.available !== false);
+        if (Array.isArray(menu.incense) && menu.incense.length === 3) {
+          setIncense(menu.incense);
+          setSelectedIncense(menu.incense[0].name);
+        } else {
+          setError("今日香单还在雾中，请稍后刷新再试。");
+        }
+      })
+      .catch(() => {
+        setIsAvailable(true);
+        setError("今日香单还在雾中，请稍后刷新再试。");
+      });
+  }, []);
 
   async function submitRitual() {
     setIsSubmitting(true);
@@ -64,26 +87,32 @@ export default function ThanksPage() {
 
         <h1 className="mt-5 text-3xl font-semibold text-violet-50 md:text-4xl">感谢之殿</h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-violet-200/90">
-          三炷香已备好。慢一点也没关系，选一炷你喜欢的香，
-          留下一句话（或只叩拜），让今日的感谢有个落点。
+          今日的一炷香已备好。选一种你喜欢的香气，留下一句话（也可以不写），
+          就让这份感谢在殿前安静落下。
         </p>
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
-          {incense.map((name, idx) => (
+          {incense.length === 0 && !error ? (
+            <div className="col-span-full rounded-2xl border border-violet-200/15 bg-violet-950/35 p-8 text-center text-sm text-violet-200">
+              殿中正在为你调制今日的三缕香气……
+            </div>
+          ) : null}
+          {incense.map((item) => (
             <button
-              key={name}
+              key={item.name}
               type="button"
-              onClick={() => setSelectedIncense(name)}
+              disabled={isAvailable === false}
+              onClick={() => setSelectedIncense(item.name)}
               className={`rounded-2xl border p-5 text-left transition hover:bg-violet-800/40 ${
-                selectedIncense === name
+                selectedIncense === item.name
                   ? "border-violet-100/45 bg-violet-800/55 shadow-[0_0_30px_rgba(196,181,253,0.15)]"
                   : "border-violet-200/20 bg-violet-900/35"
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-50`}
             >
-              <p className="text-xs text-violet-300">第 {idx + 1} 炷</p>
-              <p className="mt-2 text-lg text-violet-100">{name}</p>
-              <p className="mt-2 text-xs text-violet-300/80">
-                {selectedIncense === name ? "香已拈起" : "点击上香"}
+              <p className="mt-2 text-lg text-violet-100">{item.name}</p>
+              <p className="mt-2 text-xs leading-5 text-violet-300/80">{item.note}</p>
+              <p className="mt-3 text-xs text-violet-200">
+                {selectedIncense === item.name ? "已选此香" : "选择此香"}
               </p>
             </button>
           ))}
@@ -100,13 +129,20 @@ export default function ThanksPage() {
           />
           <button
             type="button"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isAvailable !== true || !selectedIncense}
             onClick={submitRitual}
             className="mt-4 rounded-full bg-violet-200 px-6 py-2.5 text-sm font-medium text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "香烟正上升……" : "完成参拜并收下回应"}
+            {isSubmitting
+              ? "香烟正上升……"
+              : isAvailable === false
+                ? "今日一炷香已安放"
+                : "敬上今日一炷香"}
           </button>
           {error ? <p className="mt-4 text-sm text-rose-200">{error}</p> : null}
+          {isAvailable === false ? (
+            <p className="mt-4 text-sm text-violet-200">明日再来，殿前会为你备好新香。</p>
+          ) : null}
           <p className="mt-4 text-sm text-violet-200/90">神前只收短短一句。说完，就让它落在这里。</p>
         </section>
       </div>

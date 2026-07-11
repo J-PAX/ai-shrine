@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const shrineNotices = [
-  "今日免费三炷香已备好",
+  "今日一炷香已备好，可任选喜欢的香型",
   "神前回音约 12 秒",
   "求签今日尚余 1 次免费机会",
 ];
