@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
-import { generateOracle } from "../../../../lib/services/oracle";
+import { completeRitual } from "../../../../lib/services/ritual";
 import { parseRitualRequest } from "../../../../lib/utils/validator";
+import {
+  apiErrorResponse,
+  invalidRequest,
+  readJsonBody,
+} from "../../../../lib/http/errors";
 
 export async function POST(request: Request) {
   try {
-    const input = parseRitualRequest(await request.json());
+    const input = parseRitualRequest(await readJsonBody(request));
 
-    return NextResponse.json(generateOracle(input.ritualType, input.userMessage));
+    if (input.ritualType !== "divination" || !input.sessionId) {
+      throw invalidRequest("这条签路需要一枚本地参拜印记。");
+    }
+
+    return NextResponse.json(await completeRitual(input), { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "神前回音暂时没有落下。";
-
-    return NextResponse.json(
-      {
-        error: message,
-      },
-      { status: 400 },
-    );
+    return apiErrorResponse(error, {
+      context: "POST /api/oracle",
+      fallbackMessage: "神前回音暂时没有落下。",
+    });
   }
 }

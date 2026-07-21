@@ -1,12 +1,18 @@
-import { canUseDatabase, getPrisma } from "./client";
+import { Prisma } from "@prisma/client";
+import type { RitualType } from "../utils/validator";
+import { getTokyoDayKey } from "../utils/time";
+import { getPrisma } from "./client";
+import { databaseUnavailable } from "../http/errors";
 
 export type RitualEventRecord = {
   id: string;
   sessionId: string | null;
   eventType: string;
   godName: string | null;
+  incenseName: string | null;
   userMessage: string | null;
   resultText: string | null;
+  dailyKey: string | null;
   createdAt: Date;
 };
 
@@ -14,137 +20,89 @@ export type CreateRitualEventInput = {
   sessionId?: string;
   eventType: string;
   godName?: string;
+  incenseName?: string;
   userMessage?: string;
   resultText?: string;
+  dailyKey?: string;
 };
 
-const memoryEvents = new Map<string, RitualEventRecord>();
-
-function getTokyoDayRange(now = new Date()) {
-  const tokyoOffsetMs = 9 * 60 * 60 * 1000;
-  const tokyoNow = new Date(now.getTime() + tokyoOffsetMs);
-  const start = Date.UTC(
-    tokyoNow.getUTCFullYear(),
-    tokyoNow.getUTCMonth(),
-    tokyoNow.getUTCDate(),
-  ) - tokyoOffsetMs;
-
-  return {
-    start: new Date(start),
-    end: new Date(start + 24 * 60 * 60 * 1000),
-  };
-}
-
-function createMemoryEvent(input: CreateRitualEventInput): RitualEventRecord {
-  const event: RitualEventRecord = {
-    id: crypto.randomUUID(),
-    sessionId: input.sessionId ?? null,
-    eventType: input.eventType,
-    godName: input.godName ?? null,
-    userMessage: input.userMessage ?? null,
-    resultText: input.resultText ?? null,
-    createdAt: new Date(),
-  };
-
-  memoryEvents.set(event.id, event);
-  return event;
+export class DailyRitualAlreadyCompletedError extends Error {
+  constructor() {
+    super("Daily ritual already completed.");
+    this.name = "DailyRitualAlreadyCompletedError";
+  }
 }
 
 export async function createRitualEvent(input: CreateRitualEventInput) {
-  if (!canUseDatabase()) {
-    return createMemoryEvent(input);
-  }
-
   try {
     return await getPrisma().ritualEvent.create({
       data: {
         sessionId: input.sessionId,
         eventType: input.eventType,
         godName: input.godName,
+        incenseName: input.incenseName,
         userMessage: input.userMessage,
         resultText: input.resultText,
+        dailyKey: input.dailyKey,
       },
     });
   } catch (error) {
-    console.warn("RitualEvent database write failed; falling back to memory.", error);
-    return createMemoryEvent(input);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new DailyRitualAlreadyCompletedError();
+    }
+
+    console.error("RitualEvent database write failed.", error);
+    throw databaseUnavailable("殿中暂时无法安放这次仪式，请稍后再试。");
   }
 }
 
 export async function getRitualEventById(id: string) {
-  const memoryEvent = memoryEvents.get(id);
-  if (memoryEvent) {
-    return memoryEvent;
-  }
-
-  if (!canUseDatabase()) {
-    return null;
-  }
-
   try {
     return await getPrisma().ritualEvent.findUnique({
       where: { id },
     });
   } catch (error) {
-    console.warn("RitualEvent database read failed.", error);
-    return null;
+    console.error("RitualEvent database read failed.", error);
+    throw databaseUnavailable("殿中暂时无法寻回这枚回音，请稍后再试。");
   }
 }
 
 export async function getRitualEventBySessionAndType(sessionId: string, eventType: string) {
-  const memoryEvent = Array.from(memoryEvents.values()).find(
-    (event) => event.sessionId === sessionId && event.eventType === eventType,
-  );
-
-  if (memoryEvent) {
-    return memoryEvent;
-  }
-
-  if (!canUseDatabase()) {
-    return null;
-  }
-
   try {
     return await getPrisma().ritualEvent.findFirst({
       where: { sessionId, eventType },
       orderBy: { createdAt: "desc" },
     });
   } catch (error) {
-    console.warn("RitualEvent lookup failed.", error);
-    return null;
+    console.error("RitualEvent lookup failed.", error);
+    throw databaseUnavailable("殿中暂时无法读取今日记录，请稍后再试。");
   }
 }
 
-export async function hasCompletedDailyThanks(sessionId: string, now = new Date()) {
-  const { start, end } = getTokyoDayRange(now);
+export async function hasCompletedDailyRitual(
+  sessionId: string,
+  ritualType: RitualType,
+  now = new Date(),
+) {
+  return Boolean(await getDailyRitualEvent(sessionId, ritualType, getTokyoDayKey(now)));
+}
 
-  const memoryMatch = Array.from(memoryEvents.values()).some(
-    (event) =>
-      event.sessionId === sessionId &&
-      event.eventType === "thanks" &&
-      event.createdAt >= start &&
-      event.createdAt < end,
-  );
-
-  if (memoryMatch) {
-    return true;
-  }
-
-  if (!canUseDatabase()) {
-    return false;
-  }
-
+export async function getDailyRitualEvent(
+  sessionId: string,
+  ritualType: RitualType,
+  dayKey = getTokyoDayKey(),
+) {
   try {
-    const count = await getPrisma().ritualEvent.count({
+    return await getPrisma().ritualEvent.findFirst({
       where: {
         sessionId,
-        eventType: "thanks",
-        createdAt: { gte: start, lt: end },
+        eventType: ritualType,
+        dailyKey: dayKey,
       },
+      orderBy: { createdAt: "desc" },
     });
-    return count > 0;
   } catch (error) {
-    console.warn("Daily thanks lookup failed.", error);
-    return false;
+    console.error("Daily ritual lookup failed.", error);
+    throw databaseUnavailable("殿中暂时无法确认今日参拜记录，请稍后再试。");
   }
 }

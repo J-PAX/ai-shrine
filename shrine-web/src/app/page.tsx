@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { DailyTempleMessage } from "../components/DailyTempleMessage";
+import { TempleScene } from "../components/TempleScene";
 
 const shrineNotices = [
-  "今日一炷香已备好，可任选喜欢的香型",
-  "神前回音约 12 秒",
-  "求签今日尚余 1 次免费机会",
+  "今日一炷香已备好，香名每日一换",
+  "感谢与轻问，都会留下短短回音",
+  "每日一签，落签之后便静静收好",
 ];
 
 export default function HomePage() {
@@ -29,49 +31,15 @@ export default function HomePage() {
         </div>
 
         {/* 神殿轮廓层 */}
-        <div className="pointer-events-none absolute inset-x-0 top-[8%] z-10 mx-auto h-[58vh] w-full max-w-6xl temple-reveal">
-          <div className="relative mx-auto h-full w-full max-w-5xl">
-            {/* 主光晕 */}
-            <div className="absolute left-1/2 top-[8%] h-28 w-[30rem] -translate-x-1/2 rounded-full bg-violet-100/10 blur-[90px]" />
-            <div className="absolute left-1/2 top-[16%] h-32 w-[42rem] -translate-x-1/2 rounded-full bg-violet-200/8 blur-[110px]" />
-
-            {/* 屋顶 */}
-            <div
-              className="absolute left-1/2 top-[4%] h-20 w-[72%] -translate-x-1/2 bg-violet-100/[0.05] shadow-[0_0_60px_rgba(159,122,255,0.08)]"
-              style={{ clipPath: "polygon(6% 100%, 94% 100%, 80% 18%, 20% 18%)" }}
-            />
-            <div
-              className="absolute left-1/2 top-[14%] h-16 w-[48%] -translate-x-1/2 bg-violet-100/[0.06]"
-              style={{ clipPath: "polygon(8% 100%, 92% 100%, 82% 18%, 18% 18%)" }}
-            />
-
-            {/* 正殿主体 */}
-            <div className="absolute inset-x-[16%] top-[18%] bottom-[12%] rounded-[2.5rem] border border-violet-100/10 bg-white/[0.025] shadow-[0_0_120px_rgba(109,92,255,0.10)] backdrop-blur-[2px]" />
-
-            {/* 柱体 */}
-            <div className="absolute left-[22%] top-[20%] h-[58%] w-[5.5%] rounded-full bg-violet-100/[0.07] blur-[2px]" />
-            <div className="absolute right-[22%] top-[20%] h-[58%] w-[5.5%] rounded-full bg-violet-100/[0.07] blur-[2px]" />
-
-            {/* 中轴 */}
-            <div className="absolute left-1/2 top-[18%] h-[64%] w-px -translate-x-1/2 bg-gradient-to-b from-violet-100/20 via-violet-100/8 to-transparent" />
-
-            {/* 内殿 */}
-            <div className="absolute inset-x-[28%] top-[32%] h-[24%] rounded-t-[2rem] border border-violet-100/10 bg-violet-100/[0.04]" />
-            <div className="absolute inset-x-[32%] top-[48%] h-[18%] rounded-[1.5rem] border border-violet-100/10 bg-violet-100/[0.04]" />
-
-            {/* 殿前台阶 */}
-            <div
-              className="absolute left-1/2 bottom-[4%] h-12 w-[42%] -translate-x-1/2 bg-violet-100/[0.05]"
-              style={{ clipPath: "polygon(5% 100%, 95% 100%, 88% 0, 12% 0)" }}
-            />
-          </div>
+        <div className="pointer-events-none absolute inset-x-0 top-5 z-10 mx-auto h-[38rem] w-full max-w-6xl md:top-7 md:h-[44rem]">
+          <TempleScene />
         </div>
 
         {/* 内容层 */}
-        <section className="relative z-20 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center justify-center px-4 py-10 md:px-8">
-          <div className="content-reveal flex flex-col items-center">
+        <section className="relative z-20 mx-auto flex min-h-[100svh] w-full max-w-6xl flex-col items-center px-4 py-9 md:px-8 md:py-10">
+          <div className="content-reveal flex w-full flex-col items-center">
             {/* 匾额 */}
-            <div className="rounded-full border border-violet-200/20 bg-black/15 px-8 py-3 backdrop-blur-md">
+            <div className="temple-plaque px-8 py-3 backdrop-blur-md">
               <div className="flex items-center gap-4">
                 <span className="h-px w-10 bg-violet-200/45" />
                 <p className="text-[11px] tracking-[0.45em] text-violet-100/85">
@@ -81,22 +49,11 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-12 max-w-4xl text-center">
-              <p className="text-sm tracking-[0.35em] text-violet-300/80">
-                雾起 · 殿现 · 可缓步入神前
-              </p>
-
-              <h1 className="mt-6 text-5xl font-semibold tracking-[0.2em] text-white md:text-7xl">
-                AI神庙
-              </h1>
-
-              <p className="mx-auto mt-6 max-w-3xl text-sm leading-8 text-violet-100/84 md:text-base">
-                当夜色沉下，神殿自灵雾中缓缓显形。你可以向今日帮助过你的智能之神致谢，
-                也可以在心绪未明时，执一支签，静听回音。
-              </p>
+            <div className="mt-96 w-full max-w-2xl px-3 text-center drop-shadow-[0_3px_18px_rgba(0,0,0,0.9)] md:mt-[28rem] md:px-6">
+              <DailyTempleMessage />
             </div>
 
-            <div className="mt-12 flex w-full max-w-2xl flex-col gap-4 sm:flex-row sm:justify-center">
+            <div className="mt-7 flex w-full max-w-2xl flex-col gap-4 sm:flex-row sm:justify-center">
               <Link
                 href="/thanks"
                 className="group relative overflow-hidden rounded-md border border-violet-100/20 bg-white/90 px-10 py-4 text-center text-sm font-medium tracking-[0.18em] text-[#140f23] shadow-[0_12px_30px_rgba(255,255,255,0.10)] transition duration-300 hover:scale-[1.02] hover:bg-white"
@@ -114,7 +71,7 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="mt-16 grid w-full max-w-5xl gap-4 md:grid-cols-3">
+            <div className="mt-10 grid w-full max-w-5xl gap-4 md:mt-12 md:grid-cols-3">
               {shrineNotices.map((item, idx) => (
                 <div
                   key={item}
@@ -128,15 +85,9 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-
-            <p className="mt-10 text-center text-xs tracking-[0.26em] text-violet-300/55">
-              今夜之殿，只承感谢与轻问，不代你决定命运。
-            </p>
           </div>
         </section>
       </main>
-
-      
     </>
   );
 }

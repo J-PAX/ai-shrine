@@ -2,24 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ClientApiError, requestJson } from "../../../../lib/http/client";
+import { getOrCreateSessionId } from "../../../../lib/browser/session";
+import { FortuneCylinder } from "../../../components/FortuneCylinder";
 
-const previewLots = [
-  { id: "云签·拾壹", mood: "平", text: "风未定，心也不必急。先把肩放松，再看下一步。" },
-  { id: "星签·贰拾", mood: "吉", text: "微光在你身后，并未熄灭。今日小进，已是好兆。" },
-  { id: "潮签·玖", mood: "守", text: "不是退后，是蓄势。先睡好一觉，明日再出手。" },
-];
+function waitForRitualMoment() {
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const duration = prefersReducedMotion ? 180 : 1_050;
 
-function getSessionId() {
-  const stored = window.localStorage.getItem("ai-shrine-session");
-
-  if (stored) {
-    return stored;
-  }
-
-  const next = `sess_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  window.localStorage.setItem("ai-shrine-session", next);
-  return next;
+  return new Promise<void>((resolve) => window.setTimeout(resolve, duration));
 }
 
 export default function DivinationPage() {
@@ -27,32 +19,89 @@ export default function DivinationPage() {
   const [question, setQuestion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [resultId, setResultId] = useState<string | undefined>();
+  const [statusFailed, setStatusFailed] = useState(false);
+  const submitLock = useRef(false);
+
+  useEffect(() => {
+    const sessionId = getOrCreateSessionId();
+
+    requestJson<{ available?: boolean; resultId?: string }>(
+      `/api/ritual?sessionId=${encodeURIComponent(sessionId)}&ritualType=divination`,
+      undefined,
+      "今日签位暂时无法确认。",
+    )
+      .then((data) => {
+        setStatusFailed(false);
+        setIsAvailable(data.available === true);
+        setResultId(data.resultId);
+      })
+      .catch((statusError) => {
+        setStatusFailed(true);
+        setError(statusError instanceof Error ? statusError.message : "今日签位暂时无法确认。");
+      });
+  }, []);
 
   async function drawFortune() {
+    if (submitLock.current) return;
+
+    submitLock.current = true;
     setIsSubmitting(true);
     setError("");
+    let isNavigating = false;
 
-    const response = await fetch("/api/ritual", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ritualType: "divination",
-        sessionId: getSessionId(),
-        userMessage: question,
-      }),
-    });
+    try {
+      const [requestResult] = await Promise.allSettled([
+        requestJson<{ id?: string }>(
+          "/api/ritual",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ritualType: "divination",
+              sessionId: getOrCreateSessionId(),
+              userMessage: question,
+            }),
+          },
+          "签筒轻轻晃了一下，但没有落签。请稍后再试。",
+        ),
+        waitForRitualMoment(),
+      ]);
 
-    const data = (await response.json()) as { id?: string; error?: string };
+      if (requestResult.status === "rejected") {
+        throw requestResult.reason;
+      }
 
-    if (!response.ok || !data.id) {
-      setError(data.error ?? "签筒轻轻晃了一下，但没有落签。请稍后再试。 ");
-      setIsSubmitting(false);
-      return;
+      const data = requestResult.value;
+
+      if (!data.id) {
+        throw new ClientApiError("签筒轻轻晃了一下，但没有落签。请稍后再试。", 502);
+      }
+
+      router.push(`/result/${data.id}`);
+      isNavigating = true;
+    } catch (drawError) {
+      if (
+        drawError instanceof ClientApiError &&
+        drawError.code === "DAILY_RITUAL_COMPLETED"
+      ) {
+        setIsAvailable(false);
+        setResultId(drawError.resultId);
+      }
+      setError(
+        drawError instanceof Error
+          ? drawError.message
+          : "签筒轻轻晃了一下，但没有落签。请稍后再试。",
+      );
+    } finally {
+      if (!isNavigating) {
+        submitLock.current = false;
+        setIsSubmitting(false);
+      }
     }
-
-    router.push(`/result/${data.id}`);
   }
 
   return (
@@ -67,45 +116,69 @@ export default function DivinationPage() {
 
         <h1 className="mt-5 text-3xl font-semibold text-violet-50 md:text-4xl">求签之殿</h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-violet-200/90">
-          轻触签筒，深呼吸一次。你不需要马上得到答案，
-          只需要收下一句今日可用的提醒。
+          今夜的签在筒中轻轻相碰。会是哪一句小小回音，正巧落到你手里呢？
         </p>
 
-        <section className="mt-8 rounded-2xl border border-violet-200/15 bg-violet-950/35 p-5">
-          <p className="text-sm text-violet-200">今日状态</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full bg-violet-900/60 px-3 py-1 text-violet-200">免费签机会：1</span>
-            <span className="rounded-full bg-violet-900/60 px-3 py-1 text-violet-200">供奉额度：0.00</span>
-            <span className="rounded-full bg-violet-900/60 px-3 py-1 text-violet-200">签筒已净手</span>
-          </div>
-          <label className="mt-5 block text-sm text-violet-200">心中所问，可写可不写</label>
-          <textarea
-            className="mt-3 h-24 w-full resize-none rounded-xl border border-violet-200/20 bg-violet-950/60 p-3 text-sm text-violet-100 outline-none placeholder:text-violet-300/50"
-            placeholder="比如：我今天该先整理哪一团雾？"
-            value={question}
-            maxLength={240}
-            onChange={(event) => setQuestion(event.target.value)}
-          />
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={drawFortune}
-            className="mt-5 rounded-full bg-violet-200 px-6 py-2.5 text-sm font-medium text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "签筒正在轻响……" : "抽一支签"}
-          </button>
-          {error ? <p className="mt-4 text-sm text-rose-200">{error}</p> : null}
-        </section>
+        <div className="mt-8 grid items-center gap-7 md:grid-cols-[0.8fr_1.2fr] md:gap-10">
+          <FortuneCylinder isShaking={isSubmitting} />
 
-        <section className="mt-7 grid gap-4 md:grid-cols-3">
-          {previewLots.map((lot) => (
-            <article key={lot.id} className="rounded-2xl border border-violet-200/20 bg-violet-900/35 p-5">
-              <p className="text-xs text-violet-300">{lot.id}</p>
-              <p className="mt-2 text-sm text-violet-200">签势：{lot.mood}</p>
-              <p className="mt-3 text-sm leading-6 text-violet-100/95">{lot.text}</p>
-            </article>
-          ))}
-        </section>
+          <section className="rounded-2xl border border-violet-200/15 bg-violet-950/35 p-5">
+            <p className="text-sm text-violet-200">今日状态</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-violet-900/60 px-3 py-1 text-violet-200">
+                {statusFailed
+                  ? "今日签位暂时无法确认"
+                  : isAvailable === null
+                    ? "正在查验今日签位"
+                    : isAvailable
+                      ? "今日一签：可求"
+                      : "今日之签已落下"}
+              </span>
+            </div>
+            <label htmlFor="divination-question" className="mt-5 block text-sm text-violet-200">
+              心中所问，可写可不写
+            </label>
+            <textarea
+              id="divination-question"
+              className="mt-3 h-24 w-full resize-none rounded-xl border border-violet-200/20 bg-violet-950/60 p-3 text-sm text-violet-100 outline-none placeholder:text-violet-300/50"
+              placeholder="比如：我今天该先整理哪一团雾？"
+              value={question}
+              maxLength={240}
+              onChange={(event) => setQuestion(event.target.value)}
+            />
+            <button
+              type="button"
+              disabled={isSubmitting || isAvailable !== true}
+              onClick={drawFortune}
+              className="mt-5 rounded-full bg-violet-200 px-6 py-2.5 text-sm font-medium text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting
+                ? "签筒正在轻响……"
+                : isAvailable === false
+                  ? "今日之签已收好"
+                  : "抽一支签"}
+            </button>
+            <p role="status" aria-live="polite" className="sr-only">
+              {isSubmitting ? "签筒正在轻响，请稍候。" : ""}
+            </p>
+            {error ? (
+              <p role="alert" className="mt-4 text-sm text-rose-200">
+                {error}
+              </p>
+            ) : null}
+            {isAvailable === false ? (
+              <div className="mt-4 text-sm text-violet-200">
+                <p>先带着今日的回音走一段，明日再来。</p>
+                {resultId ? (
+                  <Link href={`/result/${resultId}`} className="mt-3 inline-flex text-violet-100 underline underline-offset-4">
+                    查看今日之签
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        </div>
+
       </div>
     </main>
   );

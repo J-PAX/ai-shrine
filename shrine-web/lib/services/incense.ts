@@ -1,4 +1,9 @@
-import { createRitualEvent, getRitualEventBySessionAndType } from "../db/queries";
+import {
+  createRitualEvent,
+  DailyRitualAlreadyCompletedError,
+  getRitualEventBySessionAndType,
+} from "../db/queries";
+import { getTokyoDayKey } from "../utils/time";
 
 export type IncenseOption = {
   name: string;
@@ -15,15 +20,6 @@ const nameFirst = ["月栖", "星渡", "云岫", "春灯", "青鸟", "薄暮", "
 const nameLast = ["沉光", "晚烟", "花影", "风信", "雪梦", "灯舟", "苔歌", "晨露", "夜羽", "星痕"];
 const noteFirst = ["像月色落在旧木上", "像微风穿过安静回廊", "像远山收起最后一层雾", "像一粒没有熄灭的星"];
 const noteLast = ["替今日留住一点余温。", "让尚未说完的感谢轻轻落地。", "也把疲惫安放在殿外。", "陪你慢慢松开紧绷的肩。"];
-
-function getTokyoDayKey(now = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-}
 
 function hash(value: string) {
   return Array.from(value).reduce((total, char) => (total * 31 + char.charCodeAt(0)) >>> 0, 2166136261);
@@ -73,7 +69,9 @@ async function generateWithOpenAI(seedText: string): Promise<IncenseOption[] | n
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch(
+    process.env.OPENAI_RESPONSES_URL ?? "https://api.openai.com/v1/responses",
+    {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -95,7 +93,8 @@ async function generateWithOpenAI(seedText: string): Promise<IncenseOption[] | n
       max_output_tokens: 300,
     }),
     signal: AbortSignal.timeout(12_000),
-  });
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`OpenAI incense generation failed: ${response.status}`);
@@ -128,11 +127,25 @@ export async function getDailyIncense(sessionId: string) {
   }
 
   incense ??= createFallbackIncense(seedText);
-  await createRitualEvent({
-    sessionId,
-    eventType,
-    resultText: JSON.stringify({ incense }),
-  });
+  try {
+    await createRitualEvent({
+      sessionId,
+      eventType,
+      resultText: JSON.stringify({ incense }),
+      dailyKey: dayKey,
+    });
+  } catch (error) {
+    if (error instanceof DailyRitualAlreadyCompletedError) {
+      const concurrentCache = await getRitualEventBySessionAndType(sessionId, eventType);
+      const cachedOptions = concurrentCache?.resultText
+        ? parseIncenseOptions(concurrentCache.resultText)
+        : null;
+
+      if (cachedOptions) return { incense: cachedOptions, source: "cache" as const };
+    }
+
+    throw error;
+  }
 
   return { incense, source };
 }

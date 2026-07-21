@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { boundaryCopy, emptyResultCopy } from "../../../../lib/content/copy";
+import { notFound } from "next/navigation";
+import { boundaryCopy } from "../../../../lib/content/copy";
 import { getRitualResult } from "../../../../lib/services/ritual";
 
 type SharePageProps = {
@@ -24,17 +25,7 @@ export default async function SharePage({ params }: SharePageProps) {
   const event = await getRitualResult(id);
 
   if (!event) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0e0c1e] px-6 text-violet-100">
-        <section className="w-full max-w-xl rounded-[2rem] border border-violet-300/20 bg-violet-950/45 p-8 text-center">
-          <h1 className="text-3xl font-semibold text-violet-50">{emptyResultCopy.title}</h1>
-          <p className="mt-4 text-sm leading-7 text-violet-200/90">{emptyResultCopy.body}</p>
-          <Link href="/" className="mt-7 inline-flex rounded-full bg-violet-200 px-6 py-2.5 text-sm font-medium text-violet-950 hover:bg-white">
-            回到神庙入口
-          </Link>
-        </section>
-      </main>
-    );
+    notFound();
   }
 
   return (
@@ -49,10 +40,7 @@ export default async function SharePage({ params }: SharePageProps) {
           <p className="relative mt-8 text-xs leading-6 text-violet-300/70">{boundaryCopy}</p>
         </article>
       </section>
-      <div className="mx-auto flex max-w-2xl justify-center gap-3">
-        <Link href={`/result/${event.id}`} className="rounded-full border border-violet-200/25 px-6 py-2.5 text-sm text-violet-100 hover:bg-violet-900/45">
-          查看完整回音
-        </Link>
+      <div className="mx-auto flex max-w-2xl justify-center">
         <Link href="/" className="rounded-full bg-violet-200 px-6 py-2.5 text-sm font-medium text-violet-950 hover:bg-white">
           进入神庙
         </Link>

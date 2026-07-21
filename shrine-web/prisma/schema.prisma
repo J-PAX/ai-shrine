@@ -1,6 +1,7 @@
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "binary"
+  provider        = "prisma-client-js"
+  engineType      = "binary"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -12,7 +13,28 @@ model RitualEvent {
   sessionId   String?
   eventType   String
   godName     String?
+  incenseName String?
   userMessage String?
   resultText  String?
-  createdAt   DateTime @default(now())
+  dailyKey    String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([sessionId, eventType, dailyKey], map: "RitualEvent_daily_once_key", where: { dailyKey: { not: null } })
+  @@index([sessionId, eventType, createdAt])
+}
+
+model DailyDivinationSet {
+  dayKey         String    @id @db.VarChar(10)
+  status         String    @default("GENERATING") @db.VarChar(16)
+  slips          Json?
+  attemptCount   Int       @default(1)
+  leaseToken     String?
+  leaseExpiresAt DateTime? @db.Timestamptz(3)
+  nextRetryAt    DateTime? @db.Timestamptz(3)
+  lastErrorCode  String?   @db.VarChar(32)
+  generatedAt    DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([status, nextRetryAt])
 }
